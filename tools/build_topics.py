@@ -703,6 +703,90 @@ topic(
            "적설(쌓인 눈의 깊이)과 다릅니다. 하루 최대 기록도 관측값보다 낮게 "
            "나옵니다.")
 
+# ── 12. 북극 바다 얼음 ───────────────────────────────────────────
+# 면적은 extent(얼음이 15% 이상 덮인 바다 전체)만 쓴다. area 열은 쓰지 않는다.
+# 원본 CSV 는 열 이름·값 앞에 공백이 있어 벗겨서 읽는다.
+# 1987년 12월 · 1988년 1월은 위성 공백으로 -9999 → 열두 달을 다 쓰는 3번만 1989년부터 센다.
+# NSIDC-0803 은 2025년부터라 1979~2024년만 쓰면 원본 자료가 한 가지(NSIDC-0051)다.
+# region 은 N(북반구 전체)이다. 북극해 밖 바다 얼음까지 합친 값을 '북극 바다 얼음'으로 부른다.
+ICE = {m: {int(r["year"]): float(r["extent"])
+           for r in ({k.strip(): v.strip() for k, v in row.items()}
+                     for row in load_csv(f"snow_area_{m:02d}.csv"))}
+       for m in range(1, 13)}
+ICE_SRC = {m: {int(r["year"]): r["source_dataset"]
+               for r in ({k.strip(): v.strip() for k, v in row.items()}
+                         for row in load_csv(f"snow_area_{m:02d}.csv"))}
+           for m in range(1, 13)}
+new_src_year = min(y for m in ICE_SRC for y, src in ICE_SRC[m].items()
+                   if src == "NSIDC-0803")
+
+
+def ice_mean(m, a, b):
+    return mean(ICE[m][y] for y in range(a, b + 1))
+
+
+def ice_drop(m):
+    early, late = ice_mean(m, 1979, 1988), ice_mean(m, 2015, 2024)
+    return early, late, (early - late) / early * 100
+
+
+sep_early, sep_late, sep_drop = ice_drop(9)
+mar_early, mar_late, mar_drop = ice_drop(3)
+sep_min_y = min(range(1979, 2025), key=lambda y: ICE[9][y])
+ice_month = {m: ice_mean(m, 1989, 2024) for m in range(1, 13)}
+smallest_m = min(ice_month, key=ice_month.get)
+# 배수는 해마다 3월 ÷ 9월을 구한 뒤 평균한다 (46년 평균끼리 나누면 값이 다르다)
+mar_sep = mean(ICE[3][y] / ICE[9][y] for y in range(1979, 2025))
+
+topic(
+    "arctic-ice", "🧊", "북극 바다 얼음은 얼마나 줄었나",
+    "1979년부터 2024년까지, 북극 바다 얼음의 달별 면적",
+    "NSIDC Sea Ice Index (G02135 v4.0)", "https://nsidc.org/data/g02135",
+    [
+        slider("ice1", "1979~1988년 평균과 2015~2024년 평균을 비교하면, 9월 북극 바다 "
+               "얼음 면적(extent)은 몇 % 줄었을까요?",
+               sep_drop, "%", 0, 80, 1,
+               f"9월 extent 를 1979~1988년과 2015~2024년으로 각각 평균해 비교하면 "
+               f"{sep_early:.2f} → {sep_late:.2f}백만㎢ ({sep_drop:.1f}% 감소)",
+               "'녹고 있다'는 말은 익숙해도, 얼마나 줄었는지는 잘 떠오르지 않습니다."),
+        choice("ice2", "1979~2024년 중 9월 북극 바다 얼음 면적(extent)이 가장 작았던 해는?",
+               ["2007년", "2012년", "2016년", "2020년"], f"{sep_min_y}년",
+               f"1979~2024년 9월 extent 중 가장 작은 해는 {sep_min_y}년 "
+               f"{ICE[9][sep_min_y]:.2f}백만㎢ · 보기의 해는 "
+               + " · ".join(f"{y}년 {ICE[9][y]:.2f}" for y in (2007, 2012, 2016, 2020)),
+               "줄어드는 추세라면 가장 최근이 가장 작을 것 같지만, 해마다 "
+               "오르내림이 있습니다."),
+        choice("ice3", "1989~2024년 평균으로, 1년 중 북극 바다 얼음 면적(extent)이 "
+               "가장 작은 달은?",
+               ["7월", "8월", "9월", "10월"], f"{smallest_m}월",
+               "1989~2024년 달마다 extent 를 평균하면 "
+               + " · ".join(f"{m}월 {ice_month[m]:.2f}" for m in (7, 8, 9, 10))
+               + "백만㎢",
+               "가장 더운 달과 얼음이 가장 작은 달은 같지 않습니다. 얼음은 여름 "
+               "내내 녹은 뒤에야 바닥을 찍습니다."),
+        slider("ice4", "1979~2024년 평균으로, 3월 면적(extent)은 9월 면적의 몇 배일까요?",
+               mar_sep, "배", 1, 5, 0.1,
+               f"1979~2024년 해마다 3월 extent ÷ 9월 extent 를 구해 46년을 평균하면 "
+               f"{mar_sep:.2f}배",
+               "북극 얼음은 1년 내내 같은 크기가 아닙니다. 겨울과 여름의 차이가 "
+               "생각보다 큽니다."),
+        slider("ice5", "1979~1988년 평균과 2015~2024년 평균을 비교하면, 3월 북극 바다 "
+               "얼음 면적(extent)은 몇 % 줄었을까요?",
+               mar_drop, "%", 0, 80, 1,
+               f"3월 extent 를 1979~1988년과 2015~2024년으로 각각 평균해 비교하면 "
+               f"{mar_early:.2f} → {mar_late:.2f}백만㎢ ({mar_drop:.1f}% 감소)",
+               "여름 얼음이 줄어든 폭을 겨울에도 그대로 적용하기 쉽습니다. 계절마다 "
+               "줄어든 폭이 다릅니다."),
+    ],
+    caveat="면적은 extent, 곧 얼음이 15% 이상 덮인 바다 전체의 넓이입니다. 얼음 "
+           "자체의 넓이(area)보다 크게 나옵니다. 1987년 12월과 1988년 1월은 위성 "
+           "공백으로 값이 없어, 열두 달을 비교하는 문항은 1989년부터 셉니다. "
+           f"{new_src_year}년부터는 원본 위성 자료가 바뀌어 2024년까지만 씁니다. "
+           "이 값은 위성이 잰 마이크로파를 NASA Team 계산식으로 바꾼 추정치이고, 위성이 "
+           "못 보는 극점 주변은 얼음이 있다고 가정해 넣으며, 북극해 밖 바다까지 합친 "
+           "북반구 전체의 하루치 면적을 달마다 평균한 값이라, area 기준이나 북극해만 센 "
+           "통계, NSIDC 가 자료를 다시 만든 뒤 받은 값과는 다를 수 있습니다.")
+
 
 # ════════════════════════════════════════════════════════════════
 def main() -> None:

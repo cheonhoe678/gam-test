@@ -124,6 +124,12 @@ SOURCES: list[tuple[str, str, str]] = [
      "?format=geojson&starttime=2000-01-01&endtime=2024-12-31"
      "&minmagnitude=3.0&minlatitude=33&maxlatitude=39.5"
      "&minlongitude=124&maxlongitude=132&limit=20000"),
+
+    # NSIDC 월별 자료는 달마다 파일이 하나다 (N_01 = 해마다의 1월 값). 열두 개를 다 받는다.
+    # 자료는 1978년 10월부터라 11·12월 파일에는 1978년 줄이 있다 — 1979년부터 쓰는 건 계산 단계에서.
+    *[(f"snow_area_{m:02d}.csv", f"북극 바다 얼음 면적 {m}월 1979~ (NSIDC Sea Ice Index G02135 v4.0)",
+       f"https://noaadata.apps.nsidc.org/NOAA/G02135/north/monthly/data/N_{m:02d}_extent_v4.0.csv")
+      for m in range(1, 13)],
 ]
 
 
